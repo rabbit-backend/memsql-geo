@@ -9,6 +9,10 @@ impl memsql_geo::MemsqlGeo for MemsqlGeo {
     fn st_tile_envelope(z: u8, x: u64, y: u64) -> String {
         _st_tile_envelope(z, x, y)
     }
+
+    fn st_as_mvt_geom() -> String {
+        "".to_string()
+    }
 }
 
 fn _st_tile_envelope(z: u8, x: u64, y: u64) -> String {
