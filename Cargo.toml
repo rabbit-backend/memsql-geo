@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+geo = "0.31.0"
+tile-grid = "0.6.2"
 wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen.git", rev = "60e3c5b41e616fee239304d92128e117dd9be0a7" }
+wkt = "0.14.0"
 
 [lib]
 crate-type = ["cdylib"]
