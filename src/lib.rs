@@ -5,6 +5,13 @@ wit_bindgen_rust::export!("memsql-geo.wit");
 
 struct MemsqlGeo;
 
+/*
+    SELECT st_generate_mvt_layer(r, name, x, y, z) FROM (
+        // id and geom are mandatory
+        SELECT geom, id FROM table WHERE st_intersects(geom, st_envelope(x, y, z));
+    )
+*/
+
 impl memsql_geo::MemsqlGeo for MemsqlGeo {
     fn st_tile_envelope(z: u8, x: u64, y: u64) -> String {
         _st_tile_envelope(z, x, y)
