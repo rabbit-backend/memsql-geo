@@ -1,6 +1,6 @@
-use geo::polygon;
+use geo::{BooleanOps, Geometry, Rect, coord};
 use tile_grid::{Xyz, tms};
-use wkt::ToWkt;
+use wkt::{ToWkt, TryFromWkt};
 wit_bindgen_rust::export!("memsql-geo.wit");
 
 struct MemsqlGeo;
@@ -10,8 +10,21 @@ impl memsql_geo::MemsqlGeo for MemsqlGeo {
         _st_tile_envelope(z, x, y)
     }
 
-    fn st_as_mvt_geom() -> String {
-        "".to_string()
+    fn st_as_mvt_geom(geom: String, bbox: String) -> String {
+        match Rect::<f64>::try_from_wkt_str(&bbox) {
+            Ok(bbox) => match Geometry::<f64>::try_from_wkt_str(&geom).ok() {
+                Some(Geometry::Polygon(polygon)) => {
+                    // clip the geometry with the bounding box
+                    let clipped_polygon = &bbox.to_polygon().intersection(&polygon);
+                    clipped_polygon.to_wkt().to_string()
+                }
+                Some(Geometry::LineString(ls)) => ls.to_wkt().to_string(),
+                Some(Geometry::Point(point)) => point.to_wkt().to_string(),
+                None => "".to_string(),
+                _ => "".to_string(),
+            },
+            Err(_) => "".to_string(),
+        }
     }
 }
 
@@ -20,16 +33,12 @@ fn _st_tile_envelope(z: u8, x: u64, y: u64) -> String {
     match tms().lookup("WebMercatorQuad") {
         Ok(tms) => {
             let bounds = tms.xy_bounds(&Xyz::new(x, y, z));
-            let (x1, y1, x2, y2) = (bounds.bottom, bounds.left, bounds.top, bounds.right);
+            let (x1, y1, x2, y2) = (bounds.left, bounds.bottom, bounds.right, bounds.top);
 
-            polygon![
-                (x: y1, y: x1),
-                (x: y2, y: x1),
-                (x: y2, y: x2),
-                (x: y1, y: x2),
-            ]
-            .to_wkt()
-            .to_string()
+            Rect::new(coord! {x: x1, y: y1}, coord! {x: x2, y: y2})
+                .to_polygon()
+                .to_wkt()
+                .to_string()
         }
         Err(_) => "".to_string(),
     }

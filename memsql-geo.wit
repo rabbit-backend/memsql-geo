@@ -1,2 +1,2 @@
 st-tile-envelope: func(z: u8, x: u64, y: u64) -> string
-st-as-mvt-geom: func() -> string
+st-as-mvt-geom: func(geom: string, bbox: string) -> string
