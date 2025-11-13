@@ -1,4 +1,4 @@
-use geo::{Contains, Geometry, Intersects, Rect, coord};
+use geo::{BooleanOps, Contains, Geometry, Intersects, Polygon, Rect, coord};
 use tile_grid::{Xyz, tms};
 use wkt::{ToWkt, TryFromWkt};
 wit_bindgen_rust::export!("memsql-geo.wit");
@@ -16,6 +16,23 @@ impl memsql_geo::MemsqlGeo for MemsqlGeo {
 
     fn st_contains(geom1: String, geom2: String) -> bool {
         _st_contains(geom1, geom2)
+    }
+
+    fn st_clip_bbox(bbox: String, geom: String) -> String {
+        match (
+            Geometry::<f64>::try_from_wkt_str(&bbox),
+            Geometry::<f64>::try_from_wkt_str(&geom),
+        ) {
+            (Ok(Geometry::Polygon(bbox)), geom) => match geom {
+                Ok(Geometry::Polygon(geom)) => geom.intersection(&bbox).to_wkt().to_string(),
+                Ok(Geometry::LineString(geom)) => Polygon::new(geom, vec![])
+                    .intersection(&bbox)
+                    .to_wkt()
+                    .to_string(),
+                _ => "".to_owned(),
+            },
+            _ => "".to_owned(),
+        }
     }
 }
 
