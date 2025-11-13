@@ -19,20 +19,24 @@ impl memsql_geo::MemsqlGeo for MemsqlGeo {
     }
 
     fn st_clip_bbox(bbox: String, geom: String) -> String {
-        match (
-            Geometry::<f64>::try_from_wkt_str(&bbox),
-            Geometry::<f64>::try_from_wkt_str(&geom),
-        ) {
-            (Ok(Geometry::Polygon(bbox)), geom) => match geom {
-                Ok(Geometry::Polygon(geom)) => geom.intersection(&bbox).to_wkt().to_string(),
-                Ok(Geometry::LineString(geom)) => Polygon::new(geom, vec![])
-                    .intersection(&bbox)
-                    .to_wkt()
-                    .to_string(),
-                _ => "".to_owned(),
-            },
+        _st_clip_bbox(bbox, geom)
+    }
+}
+
+fn _st_clip_bbox(bbox: String, geom: String) -> String {
+    match (
+        Geometry::<f64>::try_from_wkt_str(&bbox),
+        Geometry::<f64>::try_from_wkt_str(&geom),
+    ) {
+        (Ok(Geometry::Polygon(bbox)), geom) => match geom {
+            Ok(Geometry::Polygon(geom)) => geom.intersection(&bbox).to_wkt().to_string(),
+            Ok(Geometry::LineString(geom)) => Polygon::new(geom, vec![])
+                .intersection(&bbox)
+                .to_wkt()
+                .to_string(),
             _ => "".to_owned(),
-        }
+        },
+        _ => "".to_owned(),
     }
 }
 
