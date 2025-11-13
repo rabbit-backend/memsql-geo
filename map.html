@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Multi-WKT EPSG:3857 Viewer + XYZ Tiles</title>
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        />
+        <style>
+            html,
+            body,
+            #map {
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            #controls {
+                position: absolute;
+                z-index: 1000;
+                left: 10px;
+                top: 10px;
+                background: rgba(255, 255, 255, 0.95);
+                padding: 10px;
+                border-radius: 6px;
+                width: 380px;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            }
+            #wkts {
+                width: 100%;
+                height: 120px;
+                font-family: monospace;
+            }
+            .btn {
+                display: inline-block;
+                padding: 6px 10px;
+                margin-top: 6px;
+                background: #3388ff;
+                color: white;
+                border-radius: 4px;
+                cursor: pointer;
+                text-decoration: none;
+            }
+            #tileInfo {
+                margin-top: 6px;
+                font-size: 13px;
+                color: #333;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="controls">
+            <strong>WKT(s) in EPSG:3857 (one per line):</strong><br />
+            <textarea id="wkts">
+POLYGON((-13618263 4547543,-13618263 4548543,-13617263 4548543,-13617263 4547543,-13618263 4547543))
+POLYGON((-13617263 4547543,-13617263 4548543,-13616263 4548543,-13616263 4547543,-13617263 4547543))</textarea
+            >
+            <div>
+                <a id="plotBtn" class="btn">Plot WKTs</a>
+                <a
+                    id="clearBtn"
+                    class="btn"
+                    style="background: #777; margin-left: 8px"
+                    >Clear</a
+                >
+            </div>
+            <div id="tileInfo">Hover map to see tile X/Y/Z</div>
+        </div>
+
+        <div id="map"></div>
+
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://unpkg.com/wellknown@0.5.0/wellknown.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/proj4@2.10.0/dist/proj4.js"></script>
+
+        <script>
+            // --- Projections ---
+            proj4.defs(
+                "EPSG:3857",
+                "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+            );
+            proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
+            const to4326 = (x, y) => proj4("EPSG:3857", "EPSG:4326", [x, y]);
+
+            // --- Map setup ---
+            const map = L.map("map").setView([39.5, -98.35], 4);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+                attribution: "&copy; OpenStreetMap contributors",
+            }).addTo(map);
+
+            const wktLayer = L.layerGroup().addTo(map);
+            let tileRect = null;
+
+            // --- Functions ---
+            function parseWKT_3857(wktStr) {
+                const geom = wellknown.parse(wktStr);
+                if (!geom) return null;
+                function transformCoords(coords) {
+                    if (typeof coords[0] === "number") {
+                        const [x, y] = coords;
+                        return to4326(x, y);
+                    }
+                    return coords.map(transformCoords);
+                }
+                geom.coordinates = transformCoords(geom.coordinates);
+                return {
+                    type: "Feature",
+                    properties: { wkt: wktStr },
+                    geometry: geom,
+                };
+            }
+
+            function randomColor() {
+                const hue = Math.floor(Math.random() * 360);
+                return `hsl(${hue}, 80%, 55%)`;
+            }
+
+            // --- Plotting multiple WKTs ---
+            document.getElementById("plotBtn").addEventListener("click", () => {
+                wktLayer.clearLayers();
+                const wkts = document
+                    .getElementById("wkts")
+                    .value.trim()
+                    .split(/\n+/);
+                const boundsList = [];
+                wkts.forEach((wkt) => {
+                    const feature = parseWKT_3857(wkt);
+                    if (feature) {
+                        const color = randomColor();
+                        const layer = L.geoJSON(feature, {
+                            style: {
+                                color: color,
+                                weight: 2,
+                                fillOpacity: 0.25,
+                            },
+                        }).addTo(wktLayer);
+                        layer.eachLayer((l) =>
+                            l.bindPopup(
+                                `<b>WKT:</b><br/><pre>${feature.properties.wkt}</pre>`,
+                            ),
+                        );
+                        boundsList.push(layer.getBounds());
+                    }
+                });
+                if (boundsList.length > 0) {
+                    const allBounds = boundsList.reduce(
+                        (acc, b) => acc.extend(b),
+                        boundsList[0],
+                    );
+                    map.fitBounds(allBounds.pad(0.2));
+                }
+            });
+
+            document
+                .getElementById("clearBtn")
+                .addEventListener("click", () => wktLayer.clearLayers());
+
+            // --- Tile coordinate display ---
+            function lonLatToTile(lon, lat, z) {
+                const x = Math.floor(((lon + 180) / 360) * Math.pow(2, z));
+                const latRad = (lat * Math.PI) / 180;
+                const y = Math.floor(
+                    ((1 -
+                        Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) /
+                            Math.PI) /
+                        2) *
+                        Math.pow(2, z),
+                );
+                return { x, y, z };
+            }
+            function tileBounds(x, y, z) {
+                const n = Math.pow(2, z);
+                const lonLeft = (x / n) * 360 - 180;
+                const lonRight = ((x + 1) / n) * 360 - 180;
+                const latTop = rad2deg(
+                    Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))),
+                );
+                const latBottom = rad2deg(
+                    Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 1)) / n))),
+                );
+                return [
+                    [latBottom, lonLeft],
+                    [latTop, lonRight],
+                ];
+            }
+            function rad2deg(r) {
+                return (r * 180) / Math.PI;
+            }
+
+            const tileInfoEl = document.getElementById("tileInfo");
+            function showTile(latlng) {
+                const z = map.getZoom();
+                const t = lonLatToTile(latlng.lng, latlng.lat, z);
+                tileInfoEl.textContent = `Tile X: ${t.x}  Y: ${t.y}  Z: ${t.z}`;
+                const b = tileBounds(t.x, t.y, t.z);
+                if (tileRect) map.removeLayer(tileRect);
+                tileRect = L.rectangle(b, {
+                    color: "#3388ff",
+                    weight: 2,
+                    fill: false,
+                    dashArray: "6 6",
+                }).addTo(map);
+            }
+
+            map.on("mousemove", (e) => showTile(e.latlng));
+            map.on("zoomend moveend", () => showTile(map.getCenter()));
+        </script>
+    </body>
+</html>
