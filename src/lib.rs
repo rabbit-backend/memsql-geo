@@ -29,11 +29,16 @@ fn _st_clip_bbox(bbox: String, geom: String) -> String {
         Geometry::<f64>::try_from_wkt_str(&geom),
     ) {
         (Ok(Geometry::Polygon(bbox)), geom) => match geom {
-            Ok(Geometry::Polygon(geom)) => geom.intersection(&bbox).to_wkt().to_string(),
-            Ok(Geometry::LineString(geom)) => Polygon::new(geom, vec![])
-                .intersection(&bbox)
-                .to_wkt()
-                .to_string(),
+            Ok(Geometry::Polygon(geom)) => match geom.intersection(&bbox).0.get(0) {
+                Some(geom) => geom.to_wkt().to_string(),
+                None => "".to_owned(),
+            },
+            Ok(Geometry::LineString(geom)) => {
+                match Polygon::new(geom, vec![]).intersection(&bbox).0.get(0) {
+                    Some(geom) => geom.to_wkt().to_string(),
+                    None => "".to_owned(),
+                }
+            }
             _ => "".to_owned(),
         },
         _ => "".to_owned(),
