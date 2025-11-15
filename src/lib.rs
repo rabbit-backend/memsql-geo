@@ -1,13 +1,28 @@
 use geo::{BooleanOps, Contains, Geometry, Intersects, Polygon, Rect, coord};
-use tile_grid::{Xyz, tms};
 use wkt::{ToWkt, TryFromWkt};
 wit_bindgen_rust::export!("memsql-geo.wit");
 
 struct MemsqlGeo;
 
 impl memsql_geo::MemsqlGeo for MemsqlGeo {
-    fn st_tile_envelope(z: u8, x: u64, y: u64) -> String {
-        _st_tile_envelope(z, x, y)
+    fn st_parse_bbox(bbox: String) -> String {
+        match bbox.split(',').collect::<Vec<_>>().as_slice() {
+            [x_min, y_min, x_max, y_max] => match (
+                x_min.parse::<f64>(),
+                y_min.parse::<f64>(),
+                x_max.parse::<f64>(),
+                y_max.parse::<f64>(),
+            ) {
+                (Ok(x_min), Ok(y_min), Ok(x_max), Ok(y_max)) => {
+                    Rect::new(coord! {x: x_min, y: y_min}, coord! {x: x_max, y: y_max})
+                        .to_polygon()
+                        .to_wkt()
+                        .to_string()
+                }
+                _ => "".to_owned(),
+            },
+            _ => "".to_owned(),
+        }
     }
 
     fn st_intersects(geom1: String, geom2: String) -> bool {
@@ -57,21 +72,5 @@ fn _st_intersects(geom1: String, geom2: String) -> bool {
     ) {
         (Ok(geom1), Ok(geom2)) => geom1.intersects(&geom2),
         _ => false,
-    }
-}
-
-fn _st_tile_envelope(z: u8, x: u64, y: u64) -> String {
-    match tms().lookup("WebMercatorQuad") {
-        Ok(tms) => {
-            let bounds = tms.xy_bounds(&Xyz::new(x, y, z));
-            let (min_x, min_y, max_x, max_y) =
-                (bounds.left, bounds.bottom, bounds.right, bounds.top);
-
-            Rect::new(coord! {x: min_x, y: min_y}, coord! {x: max_x, y: max_y})
-                .to_polygon()
-                .to_wkt()
-                .to_string()
-        }
-        Err(_) => "".to_string(),
     }
 }

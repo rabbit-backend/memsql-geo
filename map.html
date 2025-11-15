@@ -28,45 +28,49 @@
                 width: 380px;
                 box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
             }
-            #wkts {
+            .wktBox {
                 width: 100%;
-                height: 120px;
+                height: 90px;
+                margin-bottom: 6px;
                 font-family: monospace;
             }
             .btn {
                 display: inline-block;
                 padding: 6px 10px;
-                margin-top: 6px;
                 background: #3388ff;
-                color: white;
+                color: #fff;
                 border-radius: 4px;
                 cursor: pointer;
+                margin-top: 6px;
                 text-decoration: none;
             }
+            .btnGray {
+                background: #777;
+            }
             #tileInfo {
-                margin-top: 6px;
+                margin-top: 8px;
                 font-size: 13px;
                 color: #333;
+                white-space: pre;
             }
         </style>
     </head>
     <body>
         <div id="controls">
-            <strong>WKT(s) in EPSG:3857 (one per line):</strong><br />
-            <textarea id="wkts">
-POLYGON((-13618263 4547543,-13618263 4548543,-13617263 4548543,-13617263 4547543,-13618263 4547543))
-POLYGON((-13617263 4547543,-13617263 4548543,-13616263 4548543,-13616263 4547543,-13617263 4547543))</textarea
+            <strong>WKT(s) in EPSG:3857:</strong><br />
+            <div id="wktContainer"></div>
+
+            <a id="addWktBtn" class="btn" style="background: #44aa44"
+                >+ Add WKT</a
             >
-            <div>
-                <a id="plotBtn" class="btn">Plot WKTs</a>
-                <a
-                    id="clearBtn"
-                    class="btn"
-                    style="background: #777; margin-left: 8px"
-                    >Clear</a
-                >
-            </div>
-            <div id="tileInfo">Hover map to see tile X/Y/Z</div>
+            <br />
+
+            <a id="plotBtn" class="btn">Plot WKTs</a>
+            <a id="clearBtn" class="btn btnGray" style="margin-left: 8px"
+                >Clear</a
+            >
+
+            <div id="tileInfo"></div>
         </div>
 
         <div id="map"></div>
@@ -76,7 +80,9 @@ POLYGON((-13617263 4547543,-13617263 4548543,-13616263 4548543,-13616263 4547543
         <script src="https://cdn.jsdelivr.net/npm/proj4@2.10.0/dist/proj4.js"></script>
 
         <script>
-            // --- Projections ---
+            // ------------------------------------------------
+            // PROJECTIONS
+            // ------------------------------------------------
             proj4.defs(
                 "EPSG:3857",
                 "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
@@ -84,20 +90,57 @@ POLYGON((-13617263 4547543,-13617263 4548543,-13616263 4548543,-13616263 4547543
             proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
             const to4326 = (x, y) => proj4("EPSG:3857", "EPSG:4326", [x, y]);
 
-            // --- Map setup ---
+            // ------------------------------------------------
+            // MAP SETUP
+            // ------------------------------------------------
             const map = L.map("map").setView([39.5, -98.35], 4);
             L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
                 maxZoom: 19,
-                attribution: "&copy; OpenStreetMap contributors",
             }).addTo(map);
 
             const wktLayer = L.layerGroup().addTo(map);
             let tileRect = null;
 
-            // --- Functions ---
+            // ------------------------------------------------
+            // MULTIPLE WKT INPUT HANDLING
+            // ------------------------------------------------
+            const wktContainer = document.getElementById("wktContainer");
+
+            function addWktBox(text = "") {
+                const div = document.createElement("div");
+
+                const textarea = document.createElement("textarea");
+                textarea.className = "wktBox";
+                textarea.value = text;
+
+                const removeBtn = document.createElement("a");
+                removeBtn.textContent = "Remove";
+                removeBtn.className = "btn btnGray";
+                removeBtn.style.marginBottom = "10px";
+                removeBtn.onclick = () => div.remove();
+
+                div.appendChild(textarea);
+                div.appendChild(removeBtn);
+                wktContainer.appendChild(div);
+            }
+
+            // initial two
+            addWktBox(
+                "POLYGON((-13618263 4547543,-13618263 4548543,-13617263 4548543,-13617263 4547543,-13618263 4547543))",
+            );
+            addWktBox(
+                "POLYGON((-13617263 4547543,-13617263 4548543,-13616263 4548543,-13616263 4547543,-13617263 4547543))",
+            );
+
+            document.getElementById("addWktBtn").onclick = () => addWktBox();
+
+            // ------------------------------------------------
+            // WKT PARSING + PLOTTING
+            // ------------------------------------------------
             function parseWKT_3857(wktStr) {
                 const geom = wellknown.parse(wktStr);
                 if (!geom) return null;
+
                 function transformCoords(coords) {
                     if (typeof coords[0] === "number") {
                         const [x, y] = coords;
@@ -106,6 +149,7 @@ POLYGON((-13617263 4547543,-13617263 4548543,-13616263 4548543,-13616263 4547543
                     return coords.map(transformCoords);
                 }
                 geom.coordinates = transformCoords(geom.coordinates);
+
                 return {
                     type: "Feature",
                     properties: { wkt: wktStr },
@@ -114,51 +158,49 @@ POLYGON((-13617263 4547543,-13617263 4548543,-13616263 4548543,-13616263 4547543
             }
 
             function randomColor() {
-                const hue = Math.floor(Math.random() * 360);
-                return `hsl(${hue}, 80%, 55%)`;
+                const h = Math.floor(Math.random() * 360);
+                return `hsl(${h},80%,55%)`;
             }
 
-            // --- Plotting multiple WKTs ---
-            document.getElementById("plotBtn").addEventListener("click", () => {
+            document.getElementById("plotBtn").onclick = () => {
                 wktLayer.clearLayers();
-                const wkts = document
-                    .getElementById("wkts")
-                    .value.trim()
-                    .split(/\n+/);
+
+                const boxes = Array.from(document.querySelectorAll(".wktBox"));
                 const boundsList = [];
-                wkts.forEach((wkt) => {
-                    const feature = parseWKT_3857(wkt);
-                    if (feature) {
-                        const color = randomColor();
-                        const layer = L.geoJSON(feature, {
-                            style: {
-                                color: color,
-                                weight: 2,
-                                fillOpacity: 0.25,
-                            },
-                        }).addTo(wktLayer);
-                        layer.eachLayer((l) =>
-                            l.bindPopup(
-                                `<b>WKT:</b><br/><pre>${feature.properties.wkt}</pre>`,
-                            ),
-                        );
-                        boundsList.push(layer.getBounds());
-                    }
+
+                boxes.forEach((b) => {
+                    const wkt = b.value.trim();
+                    if (!wkt) return;
+                    const feat = parseWKT_3857(wkt);
+                    if (!feat) return;
+
+                    const color = randomColor();
+                    const layer = L.geoJSON(feat, {
+                        style: { color, weight: 2, fillOpacity: 0.25 },
+                    }).addTo(wktLayer);
+
+                    layer.eachLayer((l) =>
+                        l.bindPopup(`<pre>${feat.properties.wkt}</pre>`),
+                    );
+
+                    boundsList.push(layer.getBounds());
                 });
+
                 if (boundsList.length > 0) {
-                    const allBounds = boundsList.reduce(
+                    const merged = boundsList.reduce(
                         (acc, b) => acc.extend(b),
                         boundsList[0],
                     );
-                    map.fitBounds(allBounds.pad(0.2));
+                    map.fitBounds(merged.pad(0.2));
                 }
-            });
+            };
 
-            document
-                .getElementById("clearBtn")
-                .addEventListener("click", () => wktLayer.clearLayers());
+            document.getElementById("clearBtn").onclick = () =>
+                wktLayer.clearLayers();
 
-            // --- Tile coordinate display ---
+            // ------------------------------------------------
+            // TILE COORD + BBOX EPSG:3857
+            // ------------------------------------------------
             function lonLatToTile(lon, lat, z) {
                 const x = Math.floor(((lon + 180) / 360) * Math.pow(2, z));
                 const latRad = (lat * Math.PI) / 180;
@@ -171,38 +213,71 @@ POLYGON((-13617263 4547543,-13617263 4548543,-13616263 4548543,-13616263 4547543
                 );
                 return { x, y, z };
             }
+
+            // compute EPSG:4326 tile WGS bounds
             function tileBounds(x, y, z) {
                 const n = Math.pow(2, z);
-                const lonLeft = (x / n) * 360 - 180;
-                const lonRight = ((x + 1) / n) * 360 - 180;
+                const lonL = (x / n) * 360 - 180;
+                const lonR = ((x + 1) / n) * 360 - 180;
+
                 const latTop = rad2deg(
                     Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))),
                 );
-                const latBottom = rad2deg(
+                const latBot = rad2deg(
                     Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 1)) / n))),
                 );
-                return [
-                    [latBottom, lonLeft],
-                    [latTop, lonRight],
-                ];
+
+                return {
+                    sw: [latBot, lonL],
+                    se: [latBot, lonR],
+                    ne: [latTop, lonR],
+                    nw: [latTop, lonL],
+                };
             }
+
+            function to3857([lat, lon]) {
+                return proj4("EPSG:4326", "EPSG:3857", [lon, lat]);
+            }
+
             function rad2deg(r) {
                 return (r * 180) / Math.PI;
             }
 
             const tileInfoEl = document.getElementById("tileInfo");
+
             function showTile(latlng) {
                 const z = map.getZoom();
                 const t = lonLatToTile(latlng.lng, latlng.lat, z);
-                tileInfoEl.textContent = `Tile X: ${t.x}  Y: ${t.y}  Z: ${t.z}`;
                 const b = tileBounds(t.x, t.y, t.z);
-                if (tileRect) map.removeLayer(tileRect);
-                tileRect = L.rectangle(b, {
-                    color: "#3388ff",
-                    weight: 2,
-                    fill: false,
-                    dashArray: "6 6",
-                }).addTo(map);
+
+                // convert WGS → 3857
+                const p1 = to3857(b.sw);
+                const p2 = to3857(b.ne);
+                const minX = p1[0],
+                    minY = p1[1];
+                const maxX = p2[0],
+                    maxY = p2[1];
+
+                tileInfoEl.textContent = `Tile:
+  X=${t.x}  Y=${t.y}  Z=${t.z}
+
+BBox EPSG:3857:
+${minX.toFixed(2)},${minY.toFixed(2)},${maxX.toFixed(2)},${maxY.toFixed(2)}`;
+
+                // highlight tile
+                if (tileRect) tileRect.remove();
+                tileRect = L.rectangle(
+                    [
+                        [b.sw[0], b.sw[1]],
+                        [b.ne[0], b.ne[1]],
+                    ],
+                    {
+                        color: "#3388ff",
+                        weight: 2,
+                        fill: false,
+                        dashArray: "6 6",
+                    },
+                ).addTo(map);
             }
 
             map.on("mousemove", (e) => showTile(e.latlng));
