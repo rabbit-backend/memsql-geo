@@ -1,4 +1,4 @@
-use geo::{BooleanOps, Contains, Geometry, Intersects, Polygon, Rect, coord};
+use geo::{BooleanOps, Centroid, Contains, Geometry, Intersects, Polygon, Rect, coord};
 use tile_grid::{Xyz, tms};
 use wkt::{ToWkt, TryFromWkt};
 
@@ -41,6 +41,16 @@ impl memsql_geo::MemsqlGeo for MemsqlGeo {
 
     fn st_clip_bbox(bbox: String, geom: String) -> String {
         _st_clip_bbox(bbox, geom)
+    }
+
+    fn st_centroid(geom: String) -> String {
+        match Geometry::<f64>::try_from_wkt_str(&geom).ok() {
+            Some(geom) => geom
+                .centroid()
+                .map(|point| point.wkt_string())
+                .unwrap_or("".to_string()),
+            None => "".to_string(),
+        }
     }
 }
 
@@ -100,15 +110,5 @@ fn _st_tile_envelope(z: u8, x: u64, y: u64) -> String {
             }
         }
         Err(_) => "".to_string(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        println!("{}", _st_tile_envelope(11, 1099, 671))
     }
 }
