@@ -4,3 +4,4 @@ st-contains: func(geom1: string, geom2: string) -> bool
 st-clip-bbox: func(bbox: string, geom: string) -> string
 st-tile-envelope: func(z: u8, x: u64, y: u64) -> string
 st-centroid: func(geom: string) -> string
+st-h3-cell: func(geom: string, resolution: u8) -> string

@@ -1,4 +1,5 @@
 use geo::{BooleanOps, Centroid, Contains, Geometry, Intersects, Polygon, Rect, coord};
+use h3o::{LatLng, Resolution};
 use tile_grid::{Xyz, tms};
 use wkt::{ToWkt, TryFromWkt};
 
@@ -50,6 +51,34 @@ impl memsql_geo::MemsqlGeo for MemsqlGeo {
                 .map(|point| point.wkt_string())
                 .unwrap_or("".to_string()),
             None => "".to_string(),
+        }
+    }
+
+    fn st_h3_cell(geom: String, resolution: u8) -> String {
+        match Geometry::<f64>::try_from_wkt_str(&geom).ok() {
+            None => "".to_string(),
+            Some(Geometry::Point(point)) => match LatLng::new(point.x(), point.y()) {
+                Ok(point) => match resolution {
+                    1 => point.to_cell(Resolution::One).to_string(),
+                    2 => point.to_cell(Resolution::Two).to_string(),
+                    3 => point.to_cell(Resolution::Three).to_string(),
+                    4 => point.to_cell(Resolution::Four).to_string(),
+                    5 => point.to_cell(Resolution::Five).to_string(),
+                    6 => point.to_cell(Resolution::Six).to_string(),
+                    7 => point.to_cell(Resolution::Seven).to_string(),
+                    8 => point.to_cell(Resolution::Eight).to_string(),
+                    9 => point.to_cell(Resolution::Nine).to_string(),
+                    10 => point.to_cell(Resolution::Ten).to_string(),
+                    11 => point.to_cell(Resolution::Eleven).to_string(),
+                    12 => point.to_cell(Resolution::Twelve).to_string(),
+                    13 => point.to_cell(Resolution::Thirteen).to_string(),
+                    14 => point.to_cell(Resolution::Fourteen).to_string(),
+                    15 => point.to_cell(Resolution::Fifteen).to_string(),
+                    _ => "".to_string(),
+                },
+                Err(_) => "".to_string(),
+            },
+            _ => "".to_string(),
         }
     }
 }
